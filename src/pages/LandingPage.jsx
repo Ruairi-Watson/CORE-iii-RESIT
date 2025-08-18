@@ -86,35 +86,73 @@ const LandingPage = () => {
             </div>
           </div>
           
-          {/* Enhanced login buttons with glass morphism */}
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center max-w-2xl mx-auto">
-            <Link 
-              to="/login?role=employee" 
-              className="group relative w-full sm:w-80 bg-gradient-to-r from-[#f7c59f] to-[#f4b183] hover:from-[#f4b183] hover:to-[#e6a068] text-[#4b3f2a] font-bold py-6 px-8 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105"
-            >
-              <div className="flex items-center justify-center space-x-3">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <span className="text-lg">Employee Access</span>
-              </div>
-              {/* Hover glow effect */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-[#f7c59f] to-[#f4b183] rounded-2xl blur opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
-            </Link>
+          {/* Enhanced action buttons with glass morphism */}
+          <div className="space-y-8">
+            {/* Get Started Section */}
+            <div className="text-center mb-8">
+              <h3 className="text-2xl font-bold text-[#4b3f2a] dark:text-white mb-2">Get Started</h3>
+              <p className="text-[#8b7355] dark:text-gray-400">Choose your role to begin your CORE journey</p>
+            </div>
             
-            <Link 
-              to="/login?role=admin" 
-              className="group relative w-full sm:w-80 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg hover:bg-white dark:hover:bg-gray-700 text-[#4b3f2a] dark:text-white font-bold py-6 px-8 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 border border-[#f0e4d7]/50 dark:border-gray-600/50"
-            >
-              <div className="flex items-center justify-center space-x-3">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                <span className="text-lg">Administrator Access</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              {/* Admin Registration Card */}
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-lg rounded-3xl p-8 border border-[#f0e4d7]/30 dark:border-gray-700/30 hover:transform hover:scale-105 transition-all duration-300 shadow-xl">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-gradient-to-br from-[#f7c59f] to-[#f4b183] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-[#4b3f2a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-[#4b3f2a] dark:text-white mb-2">Administrator</h4>
+                  <p className="text-[#8b7355] dark:text-gray-400 text-sm">Set up your organisation and manage employees</p>
+                </div>
+                
+                <div className="space-y-3">
+                  <Link 
+                    to="/register/admin" 
+                    className="group relative w-full bg-gradient-to-r from-[#f7c59f] to-[#f4b183] hover:from-[#f4b183] hover:to-[#e6a068] text-[#4b3f2a] font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center"
+                  >
+                    <span>Create Admin Account</span>
+                  </Link>
+                  
+                  <Link 
+                    to="/login?role=admin" 
+                    className="w-full bg-white/80 dark:bg-gray-700/80 backdrop-blur-lg hover:bg-white dark:hover:bg-gray-700 text-[#4b3f2a] dark:text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] border border-[#f0e4d7]/50 dark:border-gray-600/50 flex items-center justify-center"
+                  >
+                    <span>Admin Sign In</span>
+                  </Link>
+                </div>
               </div>
-              {/* Hover glow effect */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-white to-gray-100 dark:from-gray-700 dark:to-gray-600 rounded-2xl blur opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
-            </Link>
+
+              {/* Employee Registration Card */}
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-lg rounded-3xl p-8 border border-[#f0e4d7]/30 dark:border-gray-700/30 hover:transform hover:scale-105 transition-all duration-300 shadow-xl">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-gradient-to-br from-[#f7c59f] to-[#f4b183] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-[#4b3f2a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-[#4b3f2a] dark:text-white mb-2">Employee</h4>
+                  <p className="text-[#8b7355] dark:text-gray-400 text-sm">Join your team with an invitation code</p>
+                </div>
+                
+                <div className="space-y-3">
+                  <Link 
+                    to="/register/employee" 
+                    className="group relative w-full bg-gradient-to-r from-[#f7c59f] to-[#f4b183] hover:from-[#f4b183] hover:to-[#e6a068] text-[#4b3f2a] font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center"
+                  >
+                    <span>Join with Code</span>
+                  </Link>
+                  
+                  <Link 
+                    to="/login?role=employee" 
+                    className="w-full bg-white/80 dark:bg-gray-700/80 backdrop-blur-lg hover:bg-white dark:hover:bg-gray-700 text-[#4b3f2a] dark:text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] border border-[#f0e4d7]/50 dark:border-gray-600/50 flex items-center justify-center"
+                  >
+                    <span>Employee Sign In</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Trust indicators */}

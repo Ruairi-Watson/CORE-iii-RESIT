@@ -6,20 +6,24 @@ import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
 // Firebase configuration object
-// These values need to be replaced with actual Firebase project credentials
+// Your actual Firebase project credentials
 const firebaseConfig = {
-  apiKey: "your-api-key-here",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "your-sender-id",
-  appId: "your-app-id"
+  apiKey: "AIzaSyBG4L1Z7ISD7fPgYE1LNVCmiPZWVYT_Knc",
+  authDomain: "core-iii-resub.firebaseapp.com",
+  projectId: "core-iii-resub",
+  storageBucket: "core-iii-resub.firebasestorage.app",
+  messagingSenderId: "702151129291",
+  appId: "1:702151129291:web:c4a5b2c9b14a79358b034e"
 }
 
 // Check if Firebase is properly configured
-const isConfigured = !Object.values(firebaseConfig).some(value => 
-  typeof value === 'string' && value.includes('your-')
-)
+const isConfigured = firebaseConfig.apiKey && 
+  firebaseConfig.authDomain && 
+  firebaseConfig.projectId &&
+  !firebaseConfig.apiKey.includes('your-') &&
+  !firebaseConfig.authDomain.includes('your-')
+
+
 
 let app, auth, db, storage
 

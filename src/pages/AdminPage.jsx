@@ -1,6 +1,6 @@
 // Admin page component
 // Provides administrative functions for managing users, departments, and system settings
-// Only accessible to users with admin role
+// Only accessible to users with admin role - Enhanced with 4 point categories
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../features/auth/AuthContext.jsx'
 import { 
@@ -13,7 +13,7 @@ import {
   query,
   orderBy 
 } from 'firebase/firestore'
-import { db } from '../config/firebase.js'
+import { db } from '../firebase.js'
 
 const AdminPage = () => {
   // Authentication and state management
@@ -29,7 +29,13 @@ const AdminPage = () => {
     email: '',
     role: 'employee',
     department: '',
-    points: 0
+    points: {
+      attendance: 0,
+      collaboration: 0,
+      efficiency: 0,
+      innovation: 0,
+      total: 0
+    }
   })
   
   // State for new department form
@@ -39,6 +45,14 @@ const AdminPage = () => {
   const [activeTab, setActiveTab] = useState('users')
   const [showAddUser, setShowAddUser] = useState(false)
   const [showAddDepartment, setShowAddDepartment] = useState(false)
+
+  // Point categories configuration
+  const pointCategories = {
+    attendance: { name: 'Attendance', color: 'text-green-600', icon: '📅' },
+    collaboration: { name: 'Collaboration', color: 'text-blue-600', icon: '🤝' },
+    efficiency: { name: 'Efficiency', color: 'text-amber-600', icon: '⚡' },
+    innovation: { name: 'Innovation', color: 'text-purple-600', icon: '💡' }
+  }
 
   // Loads data when component mounts
   useEffect(() => {
@@ -53,10 +67,44 @@ const AdminPage = () => {
       // Loads users
       const usersQuery = query(collection(db, 'users'), orderBy('email'))
       const usersSnapshot = await getDocs(usersQuery)
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      let usersData = usersSnapshot.docs.map(doc => {
+        const data = doc.data()
+        // Handle both old and new point structures
+        if (typeof data.points === 'number') {
+          return {
+            id: doc.id,
+            ...data,
+            points: {
+              attendance: 0,
+              collaboration: 0,
+              efficiency: 0,
+              innovation: 0,
+              total: data.points || 0
+            }
+          }
+        }
+        return {
+          id: doc.id,
+          ...data,
+          points: {
+            attendance: data.points?.attendance || 0,
+            collaboration: data.points?.collaboration || 0,
+            efficiency: data.points?.efficiency || 0,
+            innovation: data.points?.innovation || 0,
+            total: data.points?.total || 0
+          }
+        }
+      })
+      
+      // Calculate total points if not already set
+      usersData = usersData.map(user => ({
+        ...user,
+        points: {
+          ...user.points,
+          total: user.points.attendance + user.points.collaboration + user.points.efficiency + user.points.innovation
+        }
       }))
+      
       setUsers(usersData)
       
       // Loads departments
@@ -74,18 +122,31 @@ const AdminPage = () => {
     }
   }
 
-  // Adds new user to the system
-  const handleAddUser = async (e) => {
-    e.preventDefault()
-    
+  // Adds a new user
+  const addUser = async () => {
     try {
+      const totalPoints = newUser.points.attendance + newUser.points.collaboration + newUser.points.efficiency + newUser.points.innovation
       await addDoc(collection(db, 'users'), {
         ...newUser,
+        points: {
+          ...newUser.points,
+          total: totalPoints
+        },
         createdAt: new Date(),
         achievements: []
       })
-      
-      setNewUser({ email: '', role: 'employee', department: '', points: 0 })
+      setNewUser({
+        email: '',
+        role: 'employee',
+        department: '',
+        points: {
+          attendance: 0,
+          collaboration: 0,
+          efficiency: 0,
+          innovation: 0,
+          total: 0
+        }
+      })
       setShowAddUser(false)
       loadData()
     } catch (error) {
@@ -93,16 +154,13 @@ const AdminPage = () => {
     }
   }
 
-  // Adds new department
-  const handleAddDepartment = async (e) => {
-    e.preventDefault()
-    
+  // Adds a new department
+  const addDepartment = async () => {
     try {
       await addDoc(collection(db, 'departments'), {
         name: newDepartment,
         createdAt: new Date()
       })
-      
       setNewDepartment('')
       setShowAddDepartment(false)
       loadData()
@@ -111,13 +169,28 @@ const AdminPage = () => {
     }
   }
 
-  // Updates user points
-  const updateUserPoints = async (userId, newPoints) => {
+  // Updates user points for a specific category
+  const updateUserPoints = async (userId, category, newPoints) => {
     try {
+      const user = users.find(u => u.id === userId)
+      if (!user) return
+
+      const updatedPoints = {
+        ...user.points,
+        [category]: parseInt(newPoints) || 0
+      }
+      
+      // Calculate new total
+      updatedPoints.total = updatedPoints.attendance + updatedPoints.collaboration + updatedPoints.efficiency + updatedPoints.innovation
+
       await updateDoc(doc(db, 'users', userId), {
-        points: parseInt(newPoints)
+        points: updatedPoints
       })
-      loadData()
+      
+      // Update local state
+      setUsers(users.map(u => 
+        u.id === userId ? { ...u, points: updatedPoints } : u
+      ))
     } catch (error) {
       console.error('Error updating points:', error)
     }
@@ -153,7 +226,7 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       {/* Admin header */}
       <div className="flex justify-between items-center mb-8">
         <div>
@@ -161,7 +234,7 @@ const AdminPage = () => {
             Administration Panel
           </h1>
           <p className="text-[#8b7355] dark:text-gray-300">
-            Manage users, departments, and system settings
+            Manage users, departments, and point categories
           </p>
         </div>
         <button
@@ -173,26 +246,26 @@ const AdminPage = () => {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex space-x-1 mb-8 bg-[#f7e7d7] dark:bg-gray-800 p-1 rounded-lg">
+      <div className="flex space-x-1 mb-8">
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-            activeTab === 'users' 
-              ? 'bg-white dark:bg-gray-700 text-[#4b3f2a] dark:text-white shadow-sm' 
-              : 'text-[#8b7355] dark:text-gray-400 hover:text-[#4b3f2a] dark:hover:text-white'
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            activeTab === 'users'
+              ? 'bg-[#f7c59f] text-[#4b3f2a]'
+              : 'bg-white dark:bg-gray-800 text-[#8b7355] dark:text-gray-300 hover:bg-[#f7c59f]/20'
           }`}
         >
-          User Management
+          👥 Users ({users.length})
         </button>
         <button
           onClick={() => setActiveTab('departments')}
-          className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
-            activeTab === 'departments' 
-              ? 'bg-white dark:bg-gray-700 text-[#4b3f2a] dark:text-white shadow-sm' 
-              : 'text-[#8b7355] dark:text-gray-400 hover:text-[#4b3f2a] dark:hover:text-white'
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            activeTab === 'departments'
+              ? 'bg-[#f7c59f] text-[#4b3f2a]'
+              : 'bg-white dark:bg-gray-800 text-[#8b7355] dark:text-gray-300 hover:bg-[#f7c59f]/20'
           }`}
         >
-          Departments
+          🏢 Departments ({departments.length})
         </button>
       </div>
 
@@ -201,8 +274,8 @@ const AdminPage = () => {
         <div className="space-y-6">
           {/* Add user button */}
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-[#4b3f2a] dark:text-white">
-              Users ({users.length})
+            <h2 className="text-xl font-bold text-[#4b3f2a] dark:text-white">
+              User Management
             </h2>
             <button
               onClick={() => setShowAddUser(true)}
@@ -214,69 +287,104 @@ const AdminPage = () => {
 
           {/* Add user form */}
           {showAddUser && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-[#f7e7d7] dark:border-gray-700 p-6">
-              <h3 className="text-lg font-medium text-[#4b3f2a] dark:text-white mb-4">Add New User</h3>
-              <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                  className="px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                  required
-                />
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                  className="px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                >
-                  <option value="employee">Employee</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Department"
-                  value={newUser.department}
-                  onChange={(e) => setNewUser({...newUser, department: e.target.value})}
-                  className="px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                />
-                <input
-                  type="number"
-                  placeholder="Initial Points"
-                  value={newUser.points}
-                  onChange={(e) => setNewUser({...newUser, points: parseInt(e.target.value) || 0})}
-                  className="px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                />
-                <div className="md:col-span-2 flex gap-2">
-                  <button
-                    type="submit"
-                    className="bg-[#f7c59f] hover:bg-[#f4b183] text-[#4b3f2a] font-medium py-2 px-4 rounded-md transition-colors"
-                  >
-                    Add User
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddUser(false)}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-md transition-colors"
-                  >
-                    Cancel
-                  </button>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-[#f7e7d7] dark:border-gray-700 space-y-4">
+              <h3 className="text-lg font-semibold text-[#4b3f2a] dark:text-white">Add New User</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#4b3f2a] dark:text-white mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-lg text-[#4b3f2a] dark:text-white dark:bg-gray-700"
+                    placeholder="user@example.com"
+                  />
                 </div>
-              </form>
+                
+                <div>
+                  <label className="block text-sm font-medium text-[#4b3f2a] dark:text-white mb-1">Role</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-lg text-[#4b3f2a] dark:text-white dark:bg-gray-700"
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-[#4b3f2a] dark:text-white mb-1">Department</label>
+                  <select
+                    value={newUser.department}
+                    onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-lg text-[#4b3f2a] dark:text-white dark:bg-gray-700"
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Point categories */}
+              <div>
+                <label className="block text-sm font-medium text-[#4b3f2a] dark:text-white mb-2">Initial Points</label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {Object.entries(pointCategories).map(([key, category]) => (
+                    <div key={key}>
+                      <label className="block text-xs font-medium text-[#8b7355] dark:text-gray-400 mb-1">
+                        {category.icon} {category.name}
+                      </label>
+                      <input
+                        type="number"
+                        value={newUser.points[key]}
+                        onChange={(e) => setNewUser({
+                          ...newUser,
+                          points: { ...newUser.points, [key]: parseInt(e.target.value) || 0 }
+                        })}
+                        className="w-full px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-lg text-[#4b3f2a] dark:text-white dark:bg-gray-700"
+                        min="0"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={addUser}
+                  className="bg-[#f7c59f] hover:bg-[#f4b183] text-[#4b3f2a] font-medium py-2 px-4 rounded-lg transition-colors"
+                >
+                  Add User
+                </button>
+                <button
+                  onClick={() => setShowAddUser(false)}
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Users table */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-[#f7e7d7] dark:border-gray-700 overflow-hidden">
+          {/* Enhanced users table */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-[#f7e7d7] dark:bg-gray-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-medium">Email</th>
-                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-medium">Role</th>
-                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-medium">Department</th>
-                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-medium">Points</th>
-                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-medium">Actions</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">Email</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">Role</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">Department</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">📅 Attendance</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">🤝 Collaboration</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">⚡ Efficiency</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">💡 Innovation</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">🏆 Total</th>
+                    <th className="px-6 py-3 text-left text-[#4b3f2a] dark:text-white font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f7e7d7] dark:divide-gray-700">
@@ -293,14 +401,27 @@ const AdminPage = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-[#8b7355] dark:text-gray-300">{user.department || 'None'}</td>
+                      
+                      {/* Individual point category inputs */}
+                      {Object.entries(pointCategories).map(([key, category]) => (
+                        <td key={key} className="px-6 py-4">
+                          <input
+                            type="number"
+                            value={user.points[key] || 0}
+                            onChange={(e) => updateUserPoints(user.id, key, e.target.value)}
+                            className={`w-20 px-2 py-1 border border-[#e9e4d7] dark:border-gray-600 rounded text-[#4b3f2a] dark:text-white dark:bg-gray-700 ${category.color}`}
+                            min="0"
+                          />
+                        </td>
+                      ))}
+                      
+                      {/* Total points (read-only) */}
                       <td className="px-6 py-4">
-                        <input
-                          type="number"
-                          value={user.points || 0}
-                          onChange={(e) => updateUserPoints(user.id, e.target.value)}
-                          className="w-20 px-2 py-1 border border-[#e9e4d7] dark:border-gray-600 rounded text-[#4b3f2a] dark:text-white dark:bg-gray-700"
-                        />
+                        <div className="text-lg font-bold text-[#4b3f2a] dark:text-white">
+                          {user.points.total || 0}
+                        </div>
                       </td>
+                      
                       <td className="px-6 py-4">
                         <button
                           onClick={() => deleteUser(user.id)}
@@ -321,9 +442,10 @@ const AdminPage = () => {
       {/* Departments tab */}
       {activeTab === 'departments' && (
         <div className="space-y-6">
+          {/* Add department button */}
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-[#4b3f2a] dark:text-white">
-              Departments ({departments.length})
+            <h2 className="text-xl font-bold text-[#4b3f2a] dark:text-white">
+              Department Management
             </h2>
             <button
               onClick={() => setShowAddDepartment(true)}
@@ -335,31 +457,34 @@ const AdminPage = () => {
 
           {/* Add department form */}
           {showAddDepartment && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-[#f7e7d7] dark:border-gray-700 p-6">
-              <h3 className="text-lg font-medium text-[#4b3f2a] dark:text-white mb-4">Add New Department</h3>
-              <form onSubmit={handleAddDepartment} className="flex gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-[#f7e7d7] dark:border-gray-700 space-y-4">
+              <h3 className="text-lg font-semibold text-[#4b3f2a] dark:text-white">Add New Department</h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-[#4b3f2a] dark:text-white mb-1">Department Name</label>
                 <input
                   type="text"
-                  placeholder="Department Name"
                   value={newDepartment}
                   onChange={(e) => setNewDepartment(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                  required
+                  className="w-full px-3 py-2 border border-[#e9e4d7] dark:border-gray-600 rounded-lg text-[#4b3f2a] dark:text-white dark:bg-gray-700"
+                  placeholder="Enter department name"
                 />
+              </div>
+              
+              <div className="flex space-x-3">
                 <button
-                  type="submit"
-                  className="bg-[#f7c59f] hover:bg-[#f4b183] text-[#4b3f2a] font-medium py-2 px-4 rounded-md transition-colors"
+                  onClick={addDepartment}
+                  className="bg-[#f7c59f] hover:bg-[#f4b183] text-[#4b3f2a] font-medium py-2 px-4 rounded-lg transition-colors"
                 >
-                  Add
+                  Add Department
                 </button>
                 <button
-                  type="button"
                   onClick={() => setShowAddDepartment(false)}
-                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-md transition-colors"
+                  className="bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
-              </form>
+              </div>
             </div>
           )}
 
