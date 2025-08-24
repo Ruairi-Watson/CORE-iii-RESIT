@@ -6,14 +6,14 @@ import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
 // Firebase configuration object
-// Your actual Firebase project credentials
+// Uses environment variables for security
 const firebaseConfig = {
-  apiKey: "AIzaSyBG4L1Z7ISD7fPgYE1LNVCmiPZWVYT_Knc",
-  authDomain: "core-iii-resub.firebaseapp.com",
-  projectId: "core-iii-resub",
-  storageBucket: "core-iii-resub.firebasestorage.app",
-  messagingSenderId: "702151129291",
-  appId: "1:702151129291:web:c4a5b2c9b14a79358b034e"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBG4L1Z7ISD7fPgYE1LNVCmiPZWVYT_Knc",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "core-iii-resub.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "core-iii-resub",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "core-iii-resub.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "702151129291",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:702151129291:web:c4a5b2c9b14a79358b034e"
 }
 
 // Check if Firebase is properly configured

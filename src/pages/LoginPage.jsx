@@ -9,6 +9,7 @@ const LoginPage = () => {
   // Form state management
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   
@@ -60,7 +61,7 @@ const LoginPage = () => {
           setError('Too many failed attempts. Please try again later')
           break
         default:
-          setError('Login failed. Please check your credentials')
+          setError(error.message || 'Login failed. Please check your credentials')
       }
     } finally {
       setLoading(false)
@@ -137,14 +138,31 @@ const LoginPage = () => {
                 </label>
                 <div className="relative">
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full px-6 py-4 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300 text-lg placeholder-[#8b7355]/60 dark:placeholder-gray-400"
+                    className="w-full px-6 py-4 pr-14 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300 text-lg placeholder-[#8b7355]/60 dark:placeholder-gray-400"
                     placeholder="Enter your password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#8b7355] dark:text-gray-400 hover:text-[#4b3f2a] dark:hover:text-white transition-colors duration-200 z-10"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#f7c59f]/5 to-[#f4b183]/5 pointer-events-none"></div>
                 </div>
               </div>
@@ -192,6 +210,43 @@ const LoginPage = () => {
                 <div className="absolute -inset-1 bg-gradient-to-r from-[#f7c59f] to-[#f4b183] rounded-2xl blur opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
               </button>
             </form>
+
+            {/* Sign up link for new employees */}
+            {!isAdminLogin && (
+              <div className="mt-6 text-center">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-[#e9e4d7]/50 dark:border-gray-600/50"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="bg-white/80 dark:bg-gray-800/80 px-4 text-[#8b7355] dark:text-gray-400 font-medium">
+                      New to CORE?
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col space-y-2">
+                  <button
+                    onClick={() => navigate('/employee-access')}
+                    className="group mt-4 inline-flex items-center space-x-2 bg-blue-50/60 dark:bg-blue-900/60 hover:bg-blue-50/80 dark:hover:bg-blue-900/80 backdrop-blur-sm border border-blue-200/50 dark:border-blue-600/50 text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 transition-all duration-300 font-semibold px-6 py-3 rounded-xl transform hover:scale-105"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>Employee Access (Company Code)</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/register/admin')}
+                    className="group inline-flex items-center space-x-2 bg-white/60 dark:bg-gray-700/60 hover:bg-white/80 dark:hover:bg-gray-700/80 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 text-[#4b3f2a] dark:text-white hover:text-[#2d241a] dark:hover:text-gray-100 transition-all duration-300 font-semibold px-6 py-3 rounded-xl transform hover:scale-105"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <span>Create Admin Account</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Enhanced back to home link */}
             <div className="mt-8 text-center">

@@ -1,8 +1,10 @@
-// Enhanced leaderboard page component
-// Displays employee rankings with 4 point categories, timeframe filtering, and bar chart visualization
-// Shows attendance, collaboration, efficiency, and innovation points with advanced UX
+// Enhanced leaderboard page component for employee performance visualisation
+// Displays eligible employee rankings across four performance categories with filtering capabilities
+// Features attendance, collaboration, efficiency, and innovation metrics with advanced charting
+// Excludes HR and Management departments from rankings to maintain competitive fairness
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../features/auth/AuthContext.jsx'
+import { filterLeaderboardEligibleUsers, validateUserLeaderboardEligibility } from '../utils/filter.js'
 import { 
   collection, 
   getDocs, 
@@ -11,7 +13,9 @@ import {
   where,
   updateDoc,
   doc,
-  Timestamp 
+  getDoc,
+  Timestamp,
+  onSnapshot 
 } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import {
@@ -36,7 +40,7 @@ ChartJS.register(
 
 const LeaderboardPage = () => {
   // Authentication and state management
-  const { logout, user, isAdmin } = useAuth()
+  const { logout, user, isAdmin, isFirebaseConfigured, employeeAccess } = useAuth()
   
   // State for leaderboard data
   const [users, setUsers] = useState([])
@@ -53,11 +57,11 @@ const LeaderboardPage = () => {
   
   // Point categories configuration
   const pointCategories = {
-    total: { name: 'Total Points', color: '#4b3f2a', icon: '🏆' },
-    attendance: { name: 'Attendance', color: '#22c55e', icon: '📅' },
+    total: { name: 'Total Points', color: '#f59e0b', icon: '🏆' },
+    attendance: { name: 'Attendance', color: '#10b981', icon: '📅' },
     collaboration: { name: 'Collaboration', color: '#3b82f6', icon: '🤝' },
-    efficiency: { name: 'Efficiency', color: '#f59e0b', icon: '⚡' },
-    innovation: { name: 'Innovation', color: '#8b5cf6', icon: '💡' }
+    efficiency: { name: 'Efficiency', color: '#f97316', icon: '⚡' },
+    innovation: { name: 'Innovation', color: '#a855f7', icon: '💡' }
   }
   
   // State for achievements system
@@ -70,9 +74,19 @@ const LeaderboardPage = () => {
     { id: 'total_champion', name: 'Total Champion', description: 'Reach 500 total points', category: 'total', points: 500, icon: '👑' }
   ])
 
-  // Loads data when component mounts
+  // Sets up real-time listeners when component mounts
   useEffect(() => {
-    loadData()
+    setupRealtimeListeners()
+    
+    // Cleanup listeners on unmount
+    return () => {
+      if (window.leaderboardUnsubscribers) {
+        window.leaderboardUnsubscribers.unsubscribeUsers?.()
+        window.leaderboardUnsubscribers.unsubscribeDepartments?.()
+        delete window.leaderboardUnsubscribers
+        console.log('Leaderboard real-time listeners cleaned up')
+      }
+    }
   }, [])
 
   // Filters users when selections change
@@ -80,66 +94,200 @@ const LeaderboardPage = () => {
     filterUsers()
   }, [users, selectedDepartment, selectedTimeframe, selectedCategory])
 
-  // Loads users and departments from Firestore
-  const loadData = async () => {
+  // Sets up real-time listeners for users and departments with proper access control
+  const setupRealtimeListeners = async () => {
     try {
       setLoading(true)
       
-      // Loads users ordered by total points
-      const usersQuery = query(collection(db, 'users'))
-      const usersSnapshot = await getDocs(usersQuery)
-      let usersData = usersSnapshot.docs.map(doc => {
-        const data = doc.data()
-        // Handle both old and new point structures
-        if (typeof data.points === 'number') {
-          // Convert old structure to new structure
+      let usersData = []
+      
+      // Both admins and employees can see all users from their organization
+      // This ensures a competitive leaderboard while maintaining data security
+      let currentUserOrg = null
+      
+      if (employeeAccess) {
+        // Employee access via company code
+        currentUserOrg = employeeAccess.companyName
+        console.log(`Loading users for company (employee access): ${currentUserOrg}`)
+      } else if (user?.uid) {
+        // Admin access via Firebase auth
+        const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+        if (currentUserDoc.exists()) {
+          currentUserOrg = currentUserDoc.data().organization
+          console.log(`Loading users for organization (admin): ${currentUserOrg}`)
+        }
+      }
+      
+      if (currentUserOrg) {
+        
+        const usersQuery = query(collection(db, 'users'), where('organization', '==', currentUserOrg))
+        
+        // Set up real-time listener for users
+        const unsubscribeUsers = onSnapshot(usersQuery, async (snapshot) => {
+          console.log('Real-time leaderboard users update received')
+          let usersData = snapshot.docs.map(doc => {
+          const data = doc.data()
+          // Handle both old and new point structures
+          if (typeof data.points === 'number') {
+            // Convert old structure to new structure
+            return {
+              id: doc.id,
+              ...data,
+              points: {
+                attendance: 0,
+                collaboration: 0,
+                efficiency: 0,
+                innovation: 0,
+                total: data.points || 0
+              }
+            }
+          }
           return {
             id: doc.id,
             ...data,
             points: {
-              attendance: 0,
-              collaboration: 0,
-              efficiency: 0,
-              innovation: 0,
-              total: data.points || 0
+              attendance: data.points?.attendance || 0,
+              collaboration: data.points?.collaboration || 0,
+              efficiency: data.points?.efficiency || 0,
+              innovation: data.points?.innovation || 0,
+              total: data.points?.total || 0
             }
           }
-        }
-        return {
-          id: doc.id,
-          ...data,
-          points: {
-            attendance: data.points?.attendance || 0,
-            collaboration: data.points?.collaboration || 0,
-            efficiency: data.points?.efficiency || 0,
-            innovation: data.points?.innovation || 0,
-            total: data.points?.total || 0
+          })
+          
+          console.log(`Loaded ${usersData.length} users from organization: ${currentUserOrg}`)
+          
+          // Add mock users if they exist (for development environment)
+          if (process.env.NODE_ENV === 'development') {
+            try {
+              const mockUsers = JSON.parse(localStorage.getItem('mockUsers') || '{}')
+              const mockUserArray = Object.values(mockUsers).map(mockUser => ({
+                id: mockUser.uid,
+                email: mockUser.email,
+                name: mockUser.name || (mockUser.email ? mockUser.email.split('@')[0] : 'User'),
+                role: mockUser.role,
+                department: mockUser.department,
+                organization: mockUser.organization,
+                points: mockUser.points || {
+                  attendance: 0,
+                  collaboration: 0,
+                  efficiency: 0,
+                  innovation: 0,
+                  total: 0
+                },
+                achievements: mockUser.achievements || [],
+                isMockUser: true
+              }))
+              
+              // Both admins and employees can see all mock users from their organization
+              const orgMockUsers = mockUserArray.filter(mockUser => mockUser.organization === currentUserOrg)
+              usersData = [...usersData, ...orgMockUsers]
+              console.log(`Added ${orgMockUsers.length} mock users to ${isCurrentUserAdmin ? 'admin' : 'employee'} view`)
+            } catch (error) {
+              console.log('No mock users found or error loading them:', error)
+            }
           }
-        }
+          
+          // Calculate total points if not already set
+          usersData = usersData.map(user => ({
+            ...user,
+            points: {
+              ...user.points,
+              total: user.points.attendance + user.points.collaboration + user.points.efficiency + user.points.innovation
+            }
+          }))
+          
+          // Filter out HR and Management departments from leaderboard display
+          const eligibleUsers = filterLeaderboardEligibleUsers(usersData)
+          console.log('Eligible users after filtering:', eligibleUsers.length)
+          
+          setUsers(eligibleUsers)
+          setLoading(false)
+          
+          // Updates achievements for all users (admin only)
+          if (isCurrentUserAdmin) {
+            console.log('Current user is admin, updating achievements...')
+            await updateAchievements(usersData)
+          }
+        }, (error) => {
+          console.error('Error with leaderboard users real-time listener:', error)
+          setLoading(false)
+        })
+        
+        // Store unsubscribe function
+        window.leaderboardUnsubscribers = { unsubscribeUsers }
+        
+      } else {
+        console.log('Current user document not found, falling back to default organization')
+        // Fallback for users without proper organization setup - set up listener for default org
+        const usersQuery = query(collection(db, 'users'), where('organization', '==', 'core-demo'))
+        const unsubscribeUsers = onSnapshot(usersQuery, async (snapshot) => {
+          console.log('Real-time leaderboard users update received (fallback org)')
+          let usersData = snapshot.docs.map(doc => {
+            const data = doc.data()
+            return {
+              id: doc.id,
+              ...data,
+              points: {
+                attendance: data.points?.attendance || 0,
+                collaboration: data.points?.collaboration || 0,
+                efficiency: data.points?.efficiency || 0,
+                innovation: data.points?.innovation || 0,
+                total: data.points?.total || 0
+              }
+            }
+          })
+          
+          // Calculate total points if not already set
+          usersData = usersData.map(user => ({
+            ...user,
+            points: {
+              ...user.points,
+              total: user.points.attendance + user.points.collaboration + user.points.efficiency + user.points.innovation
+            }
+          }))
+          
+          // Filter out HR and Management departments from leaderboard display
+          const eligibleUsers = filterLeaderboardEligibleUsers(usersData)
+          setUsers(eligibleUsers)
+          setLoading(false)
+          
+          // Updates achievements for all users (admin only)
+          if (isCurrentUserAdmin) {
+            await updateAchievements(usersData)
+          }
+        }, (error) => {
+          console.error('Error with fallback leaderboard users real-time listener:', error)
+          setLoading(false)
+        })
+        
+        // Store unsubscribe function
+        window.leaderboardUnsubscribers = { unsubscribeUsers }
+      }
+      
+      // Set up departments listener
+      const deptQuery = query(collection(db, 'departments'))
+      const unsubscribeDepartments = onSnapshot(deptQuery, (snapshot) => {
+        console.log('Real-time departments update received')
+        const deptData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        setDepartments(deptData)
+      }, (error) => {
+        console.error('Error with departments real-time listener:', error)
       })
       
-      // Calculate total points if not already set
-      usersData = usersData.map(user => ({
-        ...user,
-        points: {
-          ...user.points,
-          total: user.points.attendance + user.points.collaboration + user.points.efficiency + user.points.innovation
-        }
-      }))
+      // Update unsubscribers with departments listener
+      if (window.leaderboardUnsubscribers) {
+        window.leaderboardUnsubscribers.unsubscribeDepartments = unsubscribeDepartments
+      } else {
+        window.leaderboardUnsubscribers = { unsubscribeDepartments }
+      }
       
-      setUsers(usersData)
-      
-      // Loads departments
-      const deptSnapshot = await getDocs(collection(db, 'departments'))
-      const deptData = deptSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-      setDepartments(deptData)
-      
-      // Updates achievements for all users (admin only)
-      if (isCurrentUserAdmin) {
-        await updateAchievements(usersData)
+      // Set loading to false if no Firebase configuration
+      if (!isFirebaseConfigured) {
+        setLoading(false)
       }
       
     } catch (error) {
@@ -151,7 +299,13 @@ const LeaderboardPage = () => {
 
   // Updates achievements based on user performance (ADMIN ONLY)
   const updateAchievements = async (usersData) => {
+    console.log('Updating achievements for', usersData.length, 'users')
     for (const user of usersData) {
+      console.log(`Checking achievements for ${user.name || user.email || user.id}:`, {
+        id: user.id,
+        points: user.points,
+        currentAchievements: user.achievements || []
+      })
       const newAchievements = []
       
       // Category-specific achievements
@@ -160,6 +314,7 @@ const LeaderboardPage = () => {
           const categoryPoints = user.points[achievement.category] || 0
           if (categoryPoints >= achievement.points) {
             if (!user.achievements?.includes(achievement.id)) {
+              console.log(`User ${user.name || user.email || user.id} earned achievement: ${achievement.name}`)
               newAchievements.push(achievement.id)
             }
           }
@@ -170,23 +325,33 @@ const LeaderboardPage = () => {
       const allCategoriesAbove50 = ['attendance', 'collaboration', 'efficiency', 'innovation']
         .every(category => (user.points[category] || 0) >= 50)
       if (allCategoriesAbove50 && !user.achievements?.includes('all_rounder')) {
+        console.log(`User ${user.name || user.email || user.id} earned All-Rounder achievement`)
         newAchievements.push('all_rounder')
       }
       
       // Total champion achievement
       if (user.points.total >= 500 && !user.achievements?.includes('total_champion')) {
+        console.log(`User ${user.name || user.email || user.id} earned Total Champion achievement (${user.points.total} points)`)
         newAchievements.push('total_champion')
       }
       
       // Updates user achievements if new ones earned
       if (newAchievements.length > 0) {
+        console.log(`Updating ${user.name || user.email || user.id} with new achievements:`, newAchievements)
         try {
+          if (!user.id) {
+            console.error(`No user.id found for ${user.name || user.email || 'unknown user'}, cannot update achievements`)
+            continue
+          }
           await updateDoc(doc(db, 'users', user.id), {
             achievements: [...(user.achievements || []), ...newAchievements]
           })
+          console.log(`Successfully updated ${user.name || user.email || user.id} achievements`)
         } catch (error) {
-          console.error('Error updating achievements:', error)
+          console.error(`Error updating achievements for ${user.name || user.email || user.id}:`, error)
         }
+      } else {
+        console.log(`No new achievements for ${user.name || user.email || user.id}`)
       }
     }
   }
@@ -200,9 +365,7 @@ const LeaderboardPage = () => {
       filtered = filtered.filter(user => user.department === selectedDepartment)
     }
     
-    // Filter by timeframe (for now, we'll implement basic filtering)
-    // In a real app, you'd need to track when points were earned
-    // For now, we'll just sort by the selected category
+    // Sort by the selected category
     filtered.sort((a, b) => {
       const aPoints = selectedCategory === 'total' ? a.points.total : a.points[selectedCategory] || 0
       const bPoints = selectedCategory === 'total' ? b.points.total : b.points[selectedCategory] || 0
@@ -227,22 +390,25 @@ const LeaderboardPage = () => {
 
   // Prepares chart data
   const getChartData = () => {
-    const top10Users = filteredUsers.slice(0, 10)
+    const allUsers = filteredUsers
     const category = pointCategories[selectedCategory]
     
     return {
-      labels: top10Users.map(user => user.email.split('@')[0]),
+      labels: allUsers.map(user => user.name || (user.email ? user.email.split('@')[0] : 'User')),
       datasets: [
         {
           label: category.name,
-          data: top10Users.map(user => 
+          data: allUsers.map(user => 
             selectedCategory === 'total' ? user.points.total : user.points[selectedCategory] || 0
           ),
-          backgroundColor: category.color + '80',
+          backgroundColor: category.color + 'CC', // More opaque for better visibility
           borderColor: category.color,
           borderWidth: 2,
           borderRadius: 8,
           borderSkipped: false,
+          hoverBackgroundColor: category.color + 'FF', // Full opacity on hover
+          hoverBorderColor: category.color,
+          hoverBorderWidth: 3,
         },
       ],
     }
@@ -254,16 +420,29 @@ const LeaderboardPage = () => {
     plugins: {
       legend: {
         position: 'top',
+        labels: {
+          color: '#4b3f2a',
+          font: {
+            size: 14,
+            weight: 'bold'
+          }
+        }
       },
       title: {
         display: true,
-        text: `Top 10 - ${pointCategories[selectedCategory].name}`,
+        text: `${pointCategories[selectedCategory].name} Rankings`,
+        color: '#4b3f2a',
         font: {
-          size: 16,
+          size: 18,
           weight: 'bold'
         }
       },
       tooltip: {
+        backgroundColor: 'rgba(75, 63, 42, 0.9)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
+        borderColor: pointCategories[selectedCategory].color,
+        borderWidth: 2,
         callbacks: {
           label: function(context) {
             return `${context.dataset.label}: ${context.parsed.y} points`
@@ -275,12 +454,26 @@ const LeaderboardPage = () => {
       x: {
         grid: {
           display: false
+        },
+        ticks: {
+          color: '#4b3f2a',
+          font: {
+            size: 12,
+            weight: '500'
+          }
         }
       },
       y: {
         beginAtZero: true,
         grid: {
-          color: 'rgba(0, 0, 0, 0.1)'
+          color: 'rgba(75, 63, 42, 0.1)',
+          borderDash: [5, 5]
+        },
+        ticks: {
+          color: '#4b3f2a',
+          font: {
+            size: 12
+          }
         }
       },
     },
@@ -315,6 +508,9 @@ const LeaderboardPage = () => {
                 ? "Manage and track performance across 4 key areas: Attendance, Collaboration, Efficiency, and Innovation" 
                 : "View your performance and compare with colleagues across 4 key areas: Attendance, Collaboration, Efficiency, and Innovation"
               }
+            </p>
+            <p className="text-sm text-[#8b7355] dark:text-gray-400 mt-2">
+              🔄 Real-time sync active - data updates automatically across all browsers
             </p>
             <div className="flex items-center space-x-4 text-sm text-[#8b7355] dark:text-gray-400">
               <div className="flex items-center space-x-2">
@@ -510,7 +706,7 @@ const LeaderboardPage = () => {
                           <div className="relative">
                             <div className="w-12 h-12 bg-gradient-to-br from-[#f7c59f] to-[#f4b183] rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                               <span className="text-[#4b3f2a] font-bold text-lg">
-                                {employee.email.charAt(0).toUpperCase()}
+                                {(employee.name || employee.email || 'U').charAt(0).toUpperCase()}
                               </span>
                             </div>
                             {isCurrentUser && (
@@ -519,7 +715,7 @@ const LeaderboardPage = () => {
                           </div>
                           <div>
                             <div className="font-semibold text-[#4b3f2a] dark:text-white text-lg">
-                              {employee.email.split('@')[0]}
+                              {employee.name || (employee.email ? employee.email.split('@')[0] : 'User')}
                               {isCurrentUser && (
                                 <span className="ml-3 text-xs bg-gradient-to-r from-[#f7c59f] to-[#f4b183] text-[#4b3f2a] px-3 py-1 rounded-full font-bold animate-pulse">
                                   YOU
@@ -527,7 +723,7 @@ const LeaderboardPage = () => {
                               )}
                             </div>
                             <div className="text-sm text-[#8b7355] dark:text-gray-400">
-                              {employee.email}
+                              {employee.department || 'No Department'}
                             </div>
                           </div>
                         </div>

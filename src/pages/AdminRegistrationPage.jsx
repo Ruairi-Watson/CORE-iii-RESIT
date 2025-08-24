@@ -5,18 +5,23 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthContext.jsx'
 import emailjs from '@emailjs/browser'
 import { emailjsConfig } from '../config/emailjs'
+import { doc, setDoc } from 'firebase/firestore'
+import { db } from '../firebase.js'
 
 const AdminRegistrationPage = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     confirmPassword: '',
+    companyName: '',
     department: 'Management'
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [invitationCode, setInvitationCode] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   
   const navigate = useNavigate()
   const { register } = useAuth()
@@ -70,7 +75,7 @@ const AdminRegistrationPage = () => {
     setLoading(true)
 
     // Validation
-    if (!formData.email || !formData.password || !formData.confirmPassword) {
+    if (!formData.email || !formData.password || !formData.confirmPassword || !formData.companyName) {
       setError('Please fill in all fields')
       setLoading(false)
       return
@@ -92,14 +97,23 @@ const AdminRegistrationPage = () => {
       // Generate invitation code
       const code = generateInvitationCode()
       
-      // Store invitation code in localStorage for mock authentication
-      // In a real app, this would be stored in a database
-      localStorage.setItem('invitationCode', code)
-      localStorage.setItem('invitationCodeExpiry', (Date.now() + 30 * 24 * 60 * 60 * 1000).toString()) // 30 days
-      localStorage.setItem('adminEmail', formData.email)
-
-      // Register admin account
-      await register(formData.email, formData.password, 'admin', formData.department)
+      // Register admin account with company as organization
+      const result = await register(formData.email, formData.password, 'admin', formData.department, formData.companyName)
+      
+      // Store company access code in Firebase
+      const companyCode = {
+        code: code,
+        companyName: formData.companyName,
+        adminEmail: formData.email,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        isActive: true
+      }
+      
+      await setDoc(doc(db, 'companyCodes', code), companyCode)
+      console.log('Company access code stored in Firebase:', code)
+      
+      // Company code stored in Firebase only
       
       // Send invitation code via email
       const emailSent = await sendInvitationCode(formData.email, code)
@@ -215,6 +229,26 @@ const AdminRegistrationPage = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Company Name Input */}
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-semibold text-[#4b3f2a] dark:text-white mb-2">
+                Company Name
+              </label>
+              <input
+                type="text"
+                id="companyName"
+                name="companyName"
+                value={formData.companyName}
+                onChange={handleInputChange}
+                required
+                className="w-full px-4 py-3 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300"
+                placeholder="Enter your company name"
+              />
+              <p className="text-xs text-[#8b7355] dark:text-gray-400 mt-1">
+                This will be used to group your employees and generate access codes
+              </p>
+            </div>
+
             {/* Email Input */}
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-[#4b3f2a] dark:text-white mb-2">
@@ -237,18 +271,19 @@ const AdminRegistrationPage = () => {
               <label htmlFor="department" className="block text-sm font-semibold text-[#4b3f2a] dark:text-white mb-2">
                 Department
               </label>
-              <select
+              <input
+                type="text"
                 id="department"
                 name="department"
                 value={formData.department}
                 onChange={handleInputChange}
+                required
                 className="w-full px-4 py-3 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300"
-              >
-                <option value="Management">Management</option>
-                <option value="HR">Human Resources</option>
-                <option value="Operations">Operations</option>
-                <option value="IT">Information Technology</option>
-              </select>
+                placeholder="Enter your department name"
+              />
+              <p className="text-xs text-[#8b7355] dark:text-gray-400 mt-1">
+                Note: HR and Management departments are excluded from leaderboard participation
+              </p>
             </div>
 
             {/* Password Input */}
@@ -256,16 +291,35 @@ const AdminRegistrationPage = () => {
               <label htmlFor="password" className="block text-sm font-semibold text-[#4b3f2a] dark:text-white mb-2">
                 Password
               </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300"
-                placeholder="Enter secure password"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-3 pr-12 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300"
+                  placeholder="Enter secure password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#8b7355] dark:text-gray-400 hover:text-[#4b3f2a] dark:hover:text-white transition-colors duration-200"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Confirm Password Input */}
@@ -273,16 +327,35 @@ const AdminRegistrationPage = () => {
               <label htmlFor="confirmPassword" className="block text-sm font-semibold text-[#4b3f2a] dark:text-white mb-2">
                 Confirm Password
               </label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300"
-                placeholder="Confirm your password"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-3 pr-12 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#f7c59f] focus:border-transparent dark:text-white transition-all duration-300"
+                  placeholder="Confirm your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#8b7355] dark:text-gray-400 hover:text-[#4b3f2a] dark:hover:text-white transition-colors duration-200"
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                >
+                  {showConfirmPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Error Message */}

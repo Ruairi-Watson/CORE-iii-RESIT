@@ -16,7 +16,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import LeaderboardPage from './pages/LeaderboardPage.jsx'
 import AdminPage from './pages/AdminPage.jsx'
 import AdminRegistrationPage from './pages/AdminRegistrationPage.jsx'
-import EmployeeRegistrationPage from './pages/EmployeeRegistrationPage.jsx'
+import EmployeeAccessPage from './pages/EmployeeAccessPage.jsx'
 
 // Header component with navigation
 const Header = () => {
@@ -57,7 +57,7 @@ const Footer = () => {
             </span>
           </div>
           <p className="text-sm text-[#8b7355] dark:text-gray-400 mb-4">
-            Collaborative Organisational Excellence
+            Collaborative Optimisation for Results and Engagement
           </p>
           <div className="flex justify-center space-x-6 text-xs text-[#8b7355] dark:text-gray-500">
             <span>© 2024 CORE</span>
@@ -158,10 +158,10 @@ function App() {
             } 
           />
           <Route 
-            path="/register/employee" 
+            path="/employee-access" 
             element={
               <Layout>
-                <EmployeeRegistrationPage />
+                <EmployeeAccessPage />
               </Layout>
             } 
           />

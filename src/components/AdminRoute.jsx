@@ -16,9 +16,9 @@ const AdminRoute = ({ children }) => {
     userRole = null
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to landing page if not authenticated
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/" replace />
   }
 
   // Check if user is admin - STRICT CHECKING

@@ -1,135 +1,70 @@
-// Authentication context provider
-// Manages user authentication state throughout the application
-// Provides login, logout, and user data functions
+// Authentication context provider for application-wide state management
+// Manages user authentication state and session persistence across components
+// Provides secure login, logout, and user data retrieval functions
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { 
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  createUserWithEmailAndPassword 
+  createUserWithEmailAndPassword,
+  deleteUser
 } from 'firebase/auth'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore'
 import { auth, db } from '../../firebase.js'
 
-// Mock test users for development
-const MOCK_USERS = {
-  'admin@core.com': {
-    uid: 'admin-test-123',
-    email: 'admin@core.com',
-    password: 'admin123',
-    role: 'admin',
-    department: 'Management',
-    points: {
-      attendance: 95,
-      collaboration: 88,
-      efficiency: 92,
-      innovation: 85,
-      total: 360
-    },
-    achievements: ['Leadership Badge', 'Innovation Award']
-  },
-  'employee@core.com': {
-    uid: 'employee-test-456',
-    email: 'employee@core.com',
-    password: 'employee123',
-    role: 'employee',
-    department: 'Engineering',
-    points: {
-      attendance: 82,
-      collaboration: 78,
-      efficiency: 85,
-      innovation: 72,
-      total: 317
-    },
-    achievements: ['Team Player', 'Efficiency Star']
-  },
-  'john.doe@core.com': {
-    uid: 'john-test-789',
-    email: 'john.doe@core.com',
-    password: 'john123',
-    role: 'employee',
-    department: 'Sales',
-    points: {
-      attendance: 88,
-      collaboration: 92,
-      efficiency: 79,
-      innovation: 85,
-      total: 344
-    },
-    achievements: ['Sales Champion', 'Team Leader']
-  }
-}
+// Simplified authentication context - mock users removed
 
-// Creates authentication context
+// Creates authentication context for component tree state sharing
 const AuthContext = createContext()
 
-// Custom hook to access authentication context
+/**
+ * Custom hook providing access to authentication context throughout application
+ * Returns authentication state and methods for component consumption
+ * @returns {Object} - Authentication context containing user state and methods
+ */
 export const useAuth = () => {
   const context = useContext(AuthContext)
   if (!context) { 
+    // Context unavailable outside provider tree
   }
   return context
 }
 
-// Authentication provider component
+/**
+ * Authentication provider component wrapping application components
+ * Manages authentication state and provides context to child components
+ * Handles Firebase integration and fallback authentication systems
+ */
 export const AuthProvider = ({ children }) => {
-  // Tracks current user state
+  // Current authenticated user state tracking
   const [user, setUser] = useState(null)
   
-  // Tracks loading state during authentication
+  // Authentication loading state for UI feedback
   const [loading, setLoading] = useState(true)
   
-  // Tracks user role (admin or employee)
+  // User role classification (admin or employee)
   const [userRole, setUserRole] = useState(null)
+  
+  // Employee access state (for code-based access without registration)
+  const [employeeAccess, setEmployeeAccessState] = useState(null)
 
-  // Check if Firebase is configured
+  // Firebase configuration validation check
   const isFirebaseConfigured = auth && auth.app && auth.app.options && auth.app.options.projectId
 
-  // Mock login function for testing
-  const mockLogin = async (email, password) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        // Check static mock users first
-        let mockUser = MOCK_USERS[email]
-        
-        // If not found in static users, check dynamically created users
-        if (!mockUser) {
-          const dynamicUsers = JSON.parse(localStorage.getItem('mockUsers') || '{}')
-          mockUser = dynamicUsers[email]
-        }
-        
-        if (mockUser && mockUser.password === password) {
-          const userData = {
-            uid: mockUser.uid,
-            email: mockUser.email,
-            displayName: mockUser.email.split('@')[0]
-          }
-          setUser(userData)
-          setUserRole(mockUser.role)
-          
-          // Store in localStorage for persistence
-          localStorage.setItem('mockUser', JSON.stringify(userData))
-          localStorage.setItem('mockUserRole', mockUser.role)
-          
-          resolve({ user: userData })
-        } else {
-          reject(new Error('Invalid credentials'))
-        }
-      }, 1000) // Simulate network delay
-    })
-  }
-
-  // Signs in user with email and password
+  /**
+   * User authentication function with Firebase
+   * Authenticates users with email and password credentials
+   */
   const login = async (email, password) => {
-    // Use mock authentication if Firebase is not configured
     if (!isFirebaseConfigured) {
-      return mockLogin(email, password)
+      throw new Error('Firebase authentication not configured')
     }
 
     try {
+      // Firebase authentication attempt with provided credentials
       const result = await signInWithEmailAndPassword(auth, email, password)
       
-      // Retrieves user role from Firestore
+      // User role retrieval from Firestore user document
       const userDoc = await getDoc(doc(db, 'users', result.user.uid))
       if (userDoc.exists()) {
         setUserRole(userDoc.data().role)
@@ -142,65 +77,24 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  // Mock registration function for testing
-  const mockRegister = async (email, password, role = 'employee', department = '') => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        // Check if user already exists
-        const existingUsers = JSON.parse(localStorage.getItem('mockUsers') || '{}')
-        if (existingUsers[email]) {
-          reject(new Error('User already exists'))
-          return
-        }
-        
-        // Create new user
-        const newUser = {
-          uid: `${role}-${Date.now()}`,
-          email,
-          role,
-          department,
-          createdAt: new Date().toISOString(),
-          points: {
-            attendance: role === 'admin' ? 95 : Math.floor(Math.random() * 40) + 60,
-            collaboration: role === 'admin' ? 88 : Math.floor(Math.random() * 40) + 60,
-            efficiency: role === 'admin' ? 92 : Math.floor(Math.random() * 40) + 60,
-            innovation: role === 'admin' ? 85 : Math.floor(Math.random() * 40) + 60,
-            total: 0
-          },
-          achievements: role === 'admin' ? ['Leadership Badge', 'Innovation Award'] : []
-        }
-        
-        // Calculate total points
-        newUser.points.total = newUser.points.attendance + newUser.points.collaboration + 
-                               newUser.points.efficiency + newUser.points.innovation
-        
-        // Store user data
-        existingUsers[email] = { ...newUser, password }
-        localStorage.setItem('mockUsers', JSON.stringify(existingUsers))
-        
-        // Update MOCK_USERS for login
-        MOCK_USERS[email] = { ...newUser, password }
-        
-        resolve({ user: { uid: newUser.uid, email: newUser.email } })
-      }, 1000)
-    })
-  }
-
   // Creates new user account
-  const register = async (email, password, role = 'employee', department = '') => {
-    // Use mock registration if Firebase is not configured
+  const register = async (email, password, role = 'employee', department = '', organization = '') => {
     if (!isFirebaseConfigured) {
-      return mockRegister(email, password, role, department)
+      throw new Error('Firebase authentication not configured')
     }
 
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password)
       
-      // Creates user document in Firestore with 4 point categories
+      // Use provided organization (company name) or default
+      const userOrganization = organization || 'default-company'
+      
+      // Creates user document in Firestore with 4 point categories and organization
       await setDoc(doc(db, 'users', result.user.uid), {
         email,
         role,
         department,
+        organization: userOrganization,
         createdAt: new Date(),
         points: {
           attendance: 0,
@@ -220,17 +114,54 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  // Deletes the current user account completely
+  const deleteAccount = async () => {
+    if (!user) {
+      throw new Error('No user is currently logged in')
+    }
+
+    if (!isFirebaseConfigured) {
+      // For mock users, just remove from session storage
+      setUser(null)
+      setUserRole(null)
+      sessionStorage.removeItem('mockUser')
+      sessionStorage.removeItem('mockUserRole')
+      return Promise.resolve()
+    }
+
+    try {
+      // First delete the user document from Firestore
+      await deleteDoc(doc(db, 'users', user.uid))
+      
+      // Then delete the Firebase Auth user account
+      await deleteUser(user)
+      
+      // Clear local state
+      setUser(null)
+      setUserRole(null)
+      
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      throw error
+    }
+  }
+
   // Signs out current user
   const logout = () => {
     if (!isFirebaseConfigured) {
       setUser(null)
       setUserRole(null)
-      localStorage.removeItem('mockUser')
-      localStorage.removeItem('mockUserRole')
+      setEmployeeAccessState(null)
+      sessionStorage.removeItem('mockUser')
+      sessionStorage.removeItem('mockUserRole')
+      sessionStorage.removeItem('employeeAccess')
       return Promise.resolve()
     }
 
+    setUser(null)
     setUserRole(null)
+    setEmployeeAccessState(null)
+    sessionStorage.removeItem('employeeAccess')
     return signOut(auth)
   }
 
@@ -239,21 +170,59 @@ export const AuthProvider = ({ children }) => {
     return userRole === 'admin'
   }
 
-  // Get mock user data for testing
-  const getMockUserData = (email) => {
-    return MOCK_USERS[email] || null
+  // Mock user data function removed - no longer needed
+
+  // Set employee access for code-based viewing
+  const setEmployeeAccess = async (companyName, accessCode) => {
+    const employeeData = {
+      companyName,
+      accessCode,
+      role: 'employee',
+      accessTime: new Date(),
+      uid: `employee-${accessCode}-${Date.now()}`,
+      email: `employee@${companyName.toLowerCase().replace(/\s+/g, '-')}.local`
+    }
+    
+    setEmployeeAccessState(employeeData)
+    setUser(employeeData)
+    setUserRole('employee')
+    
+    // Store in sessionStorage for persistence
+    sessionStorage.setItem('employeeAccess', JSON.stringify(employeeData))
+    sessionStorage.setItem('mockUser', JSON.stringify(employeeData))
+    sessionStorage.setItem('mockUserRole', 'employee')
+    
+    console.log('Employee access granted for company:', companyName)
+  }
+
+  // Clear employee access
+  const clearEmployeeAccess = () => {
+    setEmployeeAccessState(null)
+    setUser(null)
+    setUserRole(null)
+    sessionStorage.removeItem('employeeAccess')
+    sessionStorage.removeItem('mockUser')
+    sessionStorage.removeItem('mockUserRole')
   }
 
   // Monitors authentication state changes
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      console.warn('Firebase not configured - using mock authentication')
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Firebase not configured - using mock authentication')
+      }
       
-      // Check for existing mock session
-      const savedUser = localStorage.getItem('mockUser')
-      const savedRole = localStorage.getItem('mockUserRole')
+      // Check for existing mock session or employee access
+      const savedUser = sessionStorage.getItem('mockUser')
+      const savedRole = sessionStorage.getItem('mockUserRole')
+      const savedEmployeeAccess = sessionStorage.getItem('employeeAccess')
       
-      if (savedUser && savedRole) {
+      if (savedEmployeeAccess) {
+        const employeeData = JSON.parse(savedEmployeeAccess)
+        setEmployeeAccessState(employeeData)
+        setUser(employeeData)
+        setUserRole('employee')
+      } else if (savedUser && savedRole) {
         setUser(JSON.parse(savedUser))
         setUserRole(savedRole)
       }
@@ -285,16 +254,21 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe
   }, [isFirebaseConfigured])
 
+
+
   // Context values provided to children
   const value = {
     user,
     userRole,
+    employeeAccess,
     login,
     register,
     logout,
+    deleteAccount,
     isAdmin,
     isFirebaseConfigured,
-    getMockUserData
+    setEmployeeAccess,
+    clearEmployeeAccess
   }
 
   return (

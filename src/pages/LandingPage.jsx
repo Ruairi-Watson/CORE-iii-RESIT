@@ -53,7 +53,7 @@ const LandingPage = () => {
             
             <div className="space-y-2">
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-[#8b7355] dark:text-gray-300">
-                Collaborative Organisational Excellence
+                Collaborative Optimisation for Results and Engagement
               </h2>
               <div className="w-24 h-1 bg-gradient-to-r from-[#f7c59f] to-[#f4b183] mx-auto rounded-full"></div>
             </div>
@@ -133,23 +133,17 @@ const LandingPage = () => {
                     </svg>
                   </div>
                   <h4 className="text-xl font-bold text-[#4b3f2a] dark:text-white mb-2">Employee</h4>
-                  <p className="text-[#8b7355] dark:text-gray-400 text-sm">Join your team with an invitation code</p>
+                  <p className="text-[#8b7355] dark:text-gray-400 text-sm">View your company leaderboard with an access code</p>
                 </div>
                 
                 <div className="space-y-3">
                   <Link 
-                    to="/register/employee" 
+                    to="/employee-access" 
                     className="group relative w-full bg-gradient-to-r from-[#f7c59f] to-[#f4b183] hover:from-[#f4b183] hover:to-[#e6a068] text-[#4b3f2a] font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center"
                   >
-                    <span>Join with Code</span>
+                    <span>Access with Code</span>
                   </Link>
-                  
-                  <Link 
-                    to="/login?role=employee" 
-                    className="w-full bg-white/80 dark:bg-gray-700/80 backdrop-blur-lg hover:bg-white dark:hover:bg-gray-700 text-[#4b3f2a] dark:text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02] border border-[#f0e4d7]/50 dark:border-gray-600/50 flex items-center justify-center"
-                  >
-                    <span>Employee Sign In</span>
-                  </Link>
+
                 </div>
               </div>
             </div>
