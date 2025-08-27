@@ -1,67 +1,83 @@
-// Global Jest setup configuration for React Testing Library environment
-// Extends Jest with custom matchers and essential mocking for external dependencies
 import '@testing-library/jest-dom'
 
-// Firebase module mocking with virtual implementation
-// Prevents actual Firebase initialisation during test execution
+// Suppress React Router deprecation warnings
+const originalConsoleWarn = console.warn
+console.warn = (...args) => {
+  if (
+    typeof args[0] === 'string' && 
+    (args[0].includes('React Router Future Flag Warning') ||
+     args[0].includes('v7_startTransition') ||
+     args[0].includes('v7_relativeSplatPath'))
+  ) {
+    return // Suppress React Router v7 deprecation warnings
+  }
+  originalConsoleWarn.apply(console, args)
+}
+
+// Firebase mocking
+const mockAuth = {
+  currentUser: null,
+  onAuthStateChanged: jest.fn(),
+  app: {
+    options: {
+      projectId: 'test-project-id'
+    }
+  }
+}
+
+const mockDb = {
+  collection: jest.fn(),
+  doc: jest.fn(),
+  getDocs: jest.fn(),
+  addDoc: jest.fn(),
+  updateDoc: jest.fn(),
+  deleteDoc: jest.fn(),
+  onSnapshot: jest.fn()
+}
+
+const mockStorage = {}
+
 jest.mock('./firebase.js', () => ({
-  // Authentication service mock with minimal interface
-  auth: {
-    currentUser: null,
-    onAuthStateChanged: jest.fn()
-  },
-  // Firestore database mock
-  db: {},
-  // Cloud storage mock
-  storage: {}
+  auth: mockAuth,
+  db: mockDb,
+  storage: mockStorage
 }), { virtual: true })
 
 // TypeScript Firebase module variant mock
 jest.mock('./firebase.ts', () => ({
-  auth: {
-    currentUser: null,
-    onAuthStateChanged: jest.fn()
-  },
-  db: {},
-  storage: {}
+  auth: mockAuth,
+  db: mockDb,
+  storage: mockStorage
 }), { virtual: true })
 
 // Firebase configuration module mock
-// Ensures configuration dependencies resolve correctly in tests
 jest.mock('./config/firebase.js', () => ({
-  auth: {
-    currentUser: null,
-    onAuthStateChanged: jest.fn()
-  },
-  db: {},
-  storage: {}
+  auth: mockAuth,
+  db: mockDb,
+  storage: mockStorage
 }), { virtual: true })
 
-// EmailJS service mock for contact form functionality
-// Prevents actual email sending during test execution
+// EmailJS mock
 jest.mock('@emailjs/browser', () => ({
   send: jest.fn(),
   init: jest.fn()
 }))
 
-// Chart.js library mock for data visualisation components
-// Avoids canvas rendering complexities in test environment
+// Chart.js mock
 jest.mock('chart.js', () => ({
   Chart: {
     register: jest.fn()
   }
 }))
 
-// ResizeObserver API mock for responsive component testing
-// Provides essential interface without actual resize observation
+// ResizeObserver mock
 global.ResizeObserver = jest.fn().mockImplementation(() => ({
   observe: jest.fn(),
   unobserve: jest.fn(),
   disconnect: jest.fn()
 }))
 
-// localStorage API mock for persistent state testing
-// Simulates browser storage without actual persistence
+// localStorage mock
 const localStorageMock = {
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -70,19 +86,15 @@ const localStorageMock = {
 }
 global.localStorage = localStorageMock
 
-// Media query matching mock for responsive design testing
-// Provides consistent behaviour across different test scenarios
+// matchMedia mock
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: jest.fn().mockImplementation(query => ({
-    // Default non-matching state for predictable testing
     matches: false,
     media: query,
     onchange: null,
-    // Legacy listener methods
     addListener: jest.fn(),
     removeListener: jest.fn(),
-    // Modern event listener methods
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn()

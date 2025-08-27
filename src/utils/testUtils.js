@@ -1,15 +1,13 @@
-// Testing utilities and helper functions for React component testing
-// Provides standardised rendering methods and mock data for consistent test execution
+// Testing utilities
 import React from 'react'
 import { render } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '../features/auth/AuthContext.jsx'
 import { LeaderboardProvider } from '../features/leaderboard/LeaderboardContext.jsx'
 
-// Mock authentication context provider for controlled testing scenarios
-// Replaces actual authentication logic with predictable mock implementation
+// Mock auth provider
 const MockAuthProvider = ({ children, mockUser = null, mockRole = null }) => {
-  // Standardised mock authentication state structure
+
   const mockAuthValue = {
     user: mockUser,
     userRole: mockRole,

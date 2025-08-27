@@ -47,7 +47,6 @@ const LeaderboardPage = () => {
   const [departments, setDepartments] = useState([])
   const [filteredUsers, setFilteredUsers] = useState([])
   const [selectedDepartment, setSelectedDepartment] = useState('all')
-  const [selectedTimeframe, setSelectedTimeframe] = useState('all-time')
   const [selectedCategory, setSelectedCategory] = useState('total')
   const [viewMode, setViewMode] = useState('table') // 'table' or 'chart'
   const [loading, setLoading] = useState(true)
@@ -92,7 +91,7 @@ const LeaderboardPage = () => {
   // Filters users when selections change
   useEffect(() => {
     filterUsers()
-  }, [users, selectedDepartment, selectedTimeframe, selectedCategory])
+  }, [users, selectedDepartment, selectedCategory])
 
   // Sets up real-time listeners for users and departments with proper access control
   const setupRealtimeListeners = async () => {
@@ -356,7 +355,7 @@ const LeaderboardPage = () => {
     }
   }
 
-  // Filters users by department and timeframe
+  // Filters users by department and category
   const filterUsers = () => {
     let filtered = [...users]
     
@@ -388,95 +387,119 @@ const LeaderboardPage = () => {
     }
   }
 
-  // Prepares chart data
+  // Prepares chart data with enhanced visibility
   const getChartData = () => {
-    const allUsers = filteredUsers
+    const allUsers = filteredUsers.slice(0, 15) // Limit to top 15 for better readability
     const category = pointCategories[selectedCategory]
     
     return {
-      labels: allUsers.map(user => user.name || (user.email ? user.email.split('@')[0] : 'User')),
+      labels: allUsers.map(user => {
+        const name = user.name || (user.email ? user.email.split('@')[0] : 'User')
+        // Truncate names for horizontal display (no tilt)
+        return name.length > 8 ? name.substring(0, 8) + '...' : name
+      }),
       datasets: [
         {
           label: category.name,
           data: allUsers.map(user => 
             selectedCategory === 'total' ? user.points.total : user.points[selectedCategory] || 0
           ),
-          backgroundColor: category.color + 'CC', // More opaque for better visibility
+          backgroundColor: category.color + 'E6', // More opaque for better visibility
           borderColor: category.color,
           borderWidth: 2,
-          borderRadius: 8,
+          borderRadius: 12,
           borderSkipped: false,
           hoverBackgroundColor: category.color + 'FF', // Full opacity on hover
-          hoverBorderColor: category.color,
+          hoverBorderColor: '#ffffff',
           hoverBorderWidth: 3,
+          barThickness: 'flex',
+          maxBarThickness: 60,
         },
       ],
     }
   }
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top',
-        labels: {
-          color: '#4b3f2a',
+  // Get chart options with enhanced dark mode support
+  const getChartOptions = () => {
+    const isDarkMode = document.documentElement.classList.contains('dark')
+    // Use much brighter colors for dark mode to ensure visibility
+    const textColor = isDarkMode ? '#f8fafc' : '#4b3f2a' // Very light gray for dark mode
+    const gridColor = isDarkMode ? 'rgba(248, 250, 252, 0.2)' : 'rgba(75, 63, 42, 0.1)'
+    
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: {
+            color: textColor,
+            font: {
+              size: 16,
+              weight: 'bold'
+            },
+            padding: 20
+          }
+        },
+        title: {
+          display: true,
+          text: `${pointCategories[selectedCategory].name} Rankings`,
+          color: textColor,
           font: {
-            size: 14,
+            size: 20,
             weight: 'bold'
+          },
+          padding: {
+            top: 10,
+            bottom: 30
           }
-        }
-      },
-      title: {
-        display: true,
-        text: `${pointCategories[selectedCategory].name} Rankings`,
-        color: '#4b3f2a',
-        font: {
-          size: 18,
-          weight: 'bold'
-        }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(75, 63, 42, 0.9)',
-        titleColor: '#ffffff',
-        bodyColor: '#ffffff',
-        borderColor: pointCategories[selectedCategory].color,
-        borderWidth: 2,
-        callbacks: {
-          label: function(context) {
-            return `${context.dataset.label}: ${context.parsed.y} points`
-          }
-        }
-      }
-    },
-    scales: {
-      x: {
-        grid: {
-          display: false
         },
-        ticks: {
-          color: '#4b3f2a',
-          font: {
-            size: 12,
-            weight: '500'
+        tooltip: {
+          backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+          titleColor: '#ffffff',
+          bodyColor: '#ffffff',
+          borderColor: pointCategories[selectedCategory].color,
+          borderWidth: 2,
+          cornerRadius: 8,
+          displayColors: false,
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${context.parsed.y} points`
+            }
           }
         }
       },
-      y: {
-        beginAtZero: true,
-        grid: {
-          color: 'rgba(75, 63, 42, 0.1)',
-          borderDash: [5, 5]
+      scales: {
+        x: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            color: textColor,
+            font: {
+              size: 14,
+              weight: '600'
+            },
+            maxRotation: 0, // Remove tilt - keep names horizontal
+            minRotation: 0
+          }
         },
-        ticks: {
-          color: '#4b3f2a',
-          font: {
-            size: 12
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: gridColor,
+            borderDash: [5, 5]
+          },
+          ticks: {
+            color: textColor,
+            font: {
+              size: 14,
+              weight: '500'
+            }
           }
-        }
+        },
       },
-    },
+    }
   }
 
   if (loading) {
@@ -555,7 +578,7 @@ const LeaderboardPage = () => {
 
       {/* Enhanced filters and controls */}
       <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-2xl p-6 border border-[#f0e4d7]/30 dark:border-gray-700/30 shadow-xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Department filter */}
           <div>
             <label className="block text-[#4b3f2a] dark:text-white font-semibold mb-2">
@@ -572,22 +595,6 @@ const LeaderboardPage = () => {
                   {dept.name}
                 </option>
               ))}
-            </select>
-          </div>
-
-          {/* Timeframe filter */}
-          <div>
-            <label className="block text-[#4b3f2a] dark:text-white font-semibold mb-2">
-              Timeframe
-            </label>
-            <select
-              value={selectedTimeframe}
-              onChange={(e) => setSelectedTimeframe(e.target.value)}
-              className="w-full px-4 py-2 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-lg dark:text-white font-medium transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#f7c59f]"
-            >
-              <option value="all-time">All Time</option>
-              <option value="monthly">This Month</option>
-              <option value="weekly">This Week</option>
             </select>
           </div>
 
@@ -799,8 +806,15 @@ const LeaderboardPage = () => {
         ) : (
           <div className="p-8">
             <div className="h-96">
-              <Bar data={getChartData()} options={chartOptions} />
+              <Bar data={getChartData()} options={getChartOptions()} />
             </div>
+            {filteredUsers.length > 15 && (
+              <div className="mt-4 text-center">
+                <p className="text-sm text-[#8b7355] dark:text-gray-400">
+                  📊 Showing top 15 performers for optimal readability. View table mode for complete rankings.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

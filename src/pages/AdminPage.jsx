@@ -99,9 +99,11 @@ const AdminPage = () => {
       let currentUserOrg = 'core-demo' // Default fallback
       
       try {
-        const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
-        if (currentUserDoc.exists() && currentUserDoc.data().organization) {
-          currentUserOrg = currentUserDoc.data().organization
+        if (user?.uid) {
+          const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+          if (currentUserDoc.exists() && currentUserDoc.data().organization) {
+            currentUserOrg = currentUserDoc.data().organization
+          }
         }
       } catch (orgError) {
         console.log('Error getting user organization, using default:', orgError)
@@ -130,24 +132,31 @@ const AdminPage = () => {
         console.log('Real-time users update received')
         let usersData = snapshot.docs.map(doc => {
           const data = doc.data()
+          
+          // Ensure all required fields exist with fallbacks
+          const safeData = {
+            id: doc.id,
+            name: data.name || '',
+            email: data.email || null,
+            role: data.role || 'employee',
+            department: data.department || '',
+            organization: data.organization || 'core-demo',
+            createdAt: data.createdAt || new Date(),
+            achievements: data.achievements || [],
+            isAdminCreated: data.isAdminCreated || false
+          }
+          
           // Handle both old and new point structures
           if (typeof data.points === 'number') {
-            return {
-              id: doc.id,
-              ...data,
-              points: {
-                attendance: 0,
-                collaboration: 0,
-                efficiency: 0,
-                innovation: 0,
-                total: data.points || 0
-              }
+            safeData.points = {
+              attendance: 0,
+              collaboration: 0,
+              efficiency: 0,
+              innovation: 0,
+              total: data.points || 0
             }
-          }
-          return {
-            id: doc.id,
-            ...data,
-            points: {
+          } else {
+            safeData.points = {
               attendance: data.points?.attendance || 0,
               collaboration: data.points?.collaboration || 0,
               efficiency: data.points?.efficiency || 0,
@@ -155,6 +164,8 @@ const AdminPage = () => {
               total: data.points?.total || 0
             }
           }
+          
+          return safeData
         })
         
         // Calculate total points if not already set
@@ -171,11 +182,12 @@ const AdminPage = () => {
           try {
             const mockUsers = JSON.parse(localStorage.getItem('mockUsers') || '{}')
             const mockUserArray = Object.values(mockUsers).map(mockUser => ({
-              id: mockUser.uid,
-              email: mockUser.email,
-              role: mockUser.role,
-              department: mockUser.department,
-              organization: mockUser.organization,
+              id: mockUser.uid || `mock-${Date.now()}`,
+              name: mockUser.name || mockUser.email || 'Mock User',
+              email: mockUser.email || null,
+              role: mockUser.role || 'employee',
+              department: mockUser.department || '',
+              organization: mockUser.organization || currentUserOrg,
               points: mockUser.points || {
                 attendance: 0,
                 collaboration: 0,
@@ -184,7 +196,9 @@ const AdminPage = () => {
                 total: 0
               },
               achievements: mockUser.achievements || [],
-              isMockUser: true // Flag to identify mock users
+              isMockUser: true, // Flag to identify mock users
+              isAdminCreated: false,
+              createdAt: new Date()
             })).filter(mockUser => mockUser.organization === currentUserOrg)
             
             console.log(`Found ${mockUserArray.length} mock users for organization: ${currentUserOrg}`)
@@ -194,8 +208,12 @@ const AdminPage = () => {
           }
         }
         
-        // Sort users by email on client side
-        usersData.sort((a, b) => a.email.localeCompare(b.email))
+        // Sort users by email on client side (with null safety)
+        usersData.sort((a, b) => {
+          const emailA = a.email || a.name || 'zzz_unnamed'
+          const emailB = b.email || b.name || 'zzz_unnamed'
+          return emailA.localeCompare(emailB)
+        })
         
         setUsers(usersData)
         setLoading(false)
@@ -205,38 +223,71 @@ const AdminPage = () => {
       })
       
       // Set up real-time listener for departments
+      console.log('Setting up departments query for organization:', currentUserOrg)
       const deptQuery = query(collection(db, 'departments'), where('organization', '==', currentUserOrg))
       const unsubscribeDepartments = onSnapshot(deptQuery, async (snapshot) => {
         console.log('Real-time departments update received')
-        let deptData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
+        console.log('Departments snapshot size:', snapshot.docs.length)
         
-        // If no departments found, create default ones for this organization
+        let deptData = snapshot.docs.map(doc => {
+          const data = { id: doc.id, ...doc.data() }
+          console.log('Department found:', data.name, 'for org:', data.organization)
+          return data
+        })
+        
+        // Filter departments by organization as extra safety check
+        deptData = deptData.filter(dept => dept.organization === currentUserOrg)
+        console.log('Filtered departments count:', deptData.length)
+        
+        // Always update the departments state first
+        setDepartments(deptData)
+        
+        // If no departments found, create default ones for this organization (with race condition protection)
         if (deptData.length === 0) {
+          // Use a lock mechanism to prevent multiple simultaneous creation attempts
+          const lockKey = `creating_depts_${currentUserOrg}`
+          if (sessionStorage.getItem(lockKey)) {
+            console.log('Department creation already in progress for organization:', currentUserOrg)
+            return
+          }
+          
+          // Set lock
+          sessionStorage.setItem(lockKey, 'true')
+          
           console.log('No departments found, creating defaults for organization:', currentUserOrg)
           const defaultDepts = ['Engineering', 'Sales', 'Marketing']
           
-          // Check existing departments in Firestore to avoid duplicates
-          const existingDepts = await getDocs(query(collection(db, 'departments'), where('organization', '==', currentUserOrg)))
-          const existingNames = new Set(existingDepts.docs.map(doc => doc.data().name))
-          
-          for (const deptName of defaultDepts) {
-            if (!existingNames.has(deptName)) {
-              await addDoc(collection(db, 'departments'), {
-                name: deptName,
-                organization: currentUserOrg,
-                createdAt: new Date()
-              })
-              console.log(`Created default department: ${deptName}`)
-            } else {
-              console.log(`Department ${deptName} already exists, skipping`)
+          try {
+            // Double-check existing departments in Firestore to avoid duplicates
+            const existingDepts = await getDocs(query(collection(db, 'departments'), where('organization', '==', currentUserOrg)))
+            const existingNames = new Set(existingDepts.docs.map(doc => doc.data().name))
+            
+            // Only create departments that don't exist
+            const creationPromises = []
+            for (const deptName of defaultDepts) {
+              if (!existingNames.has(deptName)) {
+                console.log(`Creating default department: ${deptName}`)
+                const promise = addDoc(collection(db, 'departments'), {
+                  name: deptName,
+                  organization: currentUserOrg,
+                  createdAt: new Date()
+                })
+                creationPromises.push(promise)
+              } else {
+                console.log(`Department ${deptName} already exists, skipping`)
+              }
             }
+            
+            // Wait for all departments to be created
+            await Promise.all(creationPromises)
+            console.log(`Successfully created ${creationPromises.length} default departments`)
+            
+          } catch (error) {
+            console.error('Error creating default departments:', error)
+          } finally {
+            // Always remove lock
+            sessionStorage.removeItem(lockKey)
           }
-          // The listener will automatically update when the new departments are added
-        } else {
-          setDepartments(deptData)
         }
       }, (error) => {
         console.error('Error with departments real-time listener:', error)
@@ -301,6 +352,13 @@ const AdminPage = () => {
       return
     }
 
+    // Critical: Check if user exists and has uid
+    if (!user || !user.uid) {
+      console.error('No authenticated user found - cannot add user')
+      alert('Authentication error: Please refresh the page and try again')
+      return
+    }
+
     // Validation checks
     if (!newUser.name || !newUser.name.trim()) {
       alert('Please enter the user\'s name')
@@ -319,6 +377,7 @@ const AdminPage = () => {
 
     try {
       console.log('Adding user:', newUser)
+      console.log('Current authenticated user:', user)
       
       // Using real Firebase configuration
       
@@ -326,12 +385,18 @@ const AdminPage = () => {
       let currentUserOrg = 'core-demo' // Default fallback
       
       try {
-        const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
-        if (currentUserDoc.exists() && currentUserDoc.data().organization) {
-          currentUserOrg = currentUserDoc.data().organization
+        if (user?.uid) {
+          const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+          if (currentUserDoc.exists() && currentUserDoc.data().organization) {
+            currentUserOrg = currentUserDoc.data().organization
+          } else {
+            console.warn('User document not found or missing organization field')
+          }
+        } else {
+          console.error('User UID is null or undefined')
         }
       } catch (orgError) {
-        console.log('Could not get user organization for adding user, using default:', orgError)
+        console.error('Could not get user organization for adding user:', orgError)
       }
       
       console.log('Using organization for new user:', currentUserOrg)
@@ -353,12 +418,18 @@ const AdminPage = () => {
       
       console.log('User data to add:', userToAdd)
       
-      await addDoc(collection(db, 'users'), userToAdd)
+      // Validate Firebase connection before attempting to add
+      if (!db) {
+        throw new Error('Firebase database not initialized')
+      }
       
-      console.log('User added successfully')
+      const docRef = await addDoc(collection(db, 'users'), userToAdd)
+      
+      console.log('User added successfully with ID:', docRef.id)
       console.log('Added user data:', userToAdd)
-      alert('User added successfully! Note: Users in Management/HR departments will not appear on the leaderboard to maintain competitive fairness.')
+      alert('✅ User added successfully!\n\nNote: Users in Management/HR departments will not appear on the leaderboard to maintain competitive fairness.')
       
+      // Reset form
       setNewUser({
         name: '',
         role: '',
@@ -389,7 +460,24 @@ const AdminPage = () => {
       }, 1000)
     } catch (error) {
       console.error('Error adding user:', error)
-      alert(`Error adding user: ${error.message}`)
+      
+      // Provide specific error messages for common issues
+      let errorMessage = 'Failed to add user. '
+      
+      if (error.code === 'permission-denied') {
+        errorMessage += 'Permission denied - check Firestore security rules.'
+      } else if (error.code === 'unavailable') {
+        errorMessage += 'Firebase service unavailable - check internet connection.'
+      } else if (error.message.includes('uid')) {
+        errorMessage += 'Authentication error - please refresh and try again.'
+      } else {
+        errorMessage += `Error: ${error.message}`
+      }
+      
+      alert(`❌ ${errorMessage}`)
+      
+      // Don't reset form on error so user doesn't lose their input
+      console.log('User form data preserved after error:', newUser)
     }
   }
 
@@ -566,6 +654,9 @@ const AdminPage = () => {
       return
     }
 
+    const confirmed = window.confirm('This will remove all duplicate departments for your organization. Continue?')
+    if (!confirmed) return
+
     try {
       // Get current user's organization
       let currentUserOrg = 'core-demo'
@@ -574,43 +665,128 @@ const AdminPage = () => {
         currentUserOrg = currentUserDoc.data().organization
       }
 
+      console.log('Cleaning up departments for organization:', currentUserOrg)
+
       // Get all departments for this organization
       const deptSnapshot = await getDocs(query(collection(db, 'departments'), where('organization', '==', currentUserOrg)))
       const allDepts = deptSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
 
-      // Group by name (case-insensitive)
+      console.log(`Found ${allDepts.length} departments total`)
+
+      // Group by name (case-insensitive and trimmed)
       const deptsByName = {}
       allDepts.forEach(dept => {
-        const normalizedName = dept.name.toLowerCase()
+        const normalizedName = dept.name.toLowerCase().trim()
         if (!deptsByName[normalizedName]) {
           deptsByName[normalizedName] = []
         }
         deptsByName[normalizedName].push(dept)
       })
 
-      // Find and delete duplicates (keep the first one)
+      // Find and delete duplicates (keep the oldest one based on createdAt)
       let deletedCount = 0
+      const deletePromises = []
+      
       for (const [name, depts] of Object.entries(deptsByName)) {
         if (depts.length > 1) {
           console.log(`Found ${depts.length} duplicates for department: ${name}`)
-          // Keep the first one, delete the rest
+          
+          // Sort by createdAt (oldest first), fallback to id if no createdAt
+          depts.sort((a, b) => {
+            if (a.createdAt && b.createdAt) {
+              return a.createdAt.toDate() - b.createdAt.toDate()
+            }
+            return (a.id || '').localeCompare(b.id || '')
+          })
+          
+          // Keep the first one (oldest), delete the rest
           for (let i = 1; i < depts.length; i++) {
-            await deleteDoc(doc(db, 'departments', depts[i].id))
+            console.log(`Marking for deletion: ${depts[i].name} (ID: ${depts[i].id})`)
+            deletePromises.push(deleteDoc(doc(db, 'departments', depts[i].id)))
             deletedCount++
-            console.log(`Deleted duplicate department: ${depts[i].name} (ID: ${depts[i].id})`)
           }
         }
       }
 
-      if (deletedCount > 0) {
-        alert(`Cleaned up ${deletedCount} duplicate departments!`)
+      // Execute all deletions
+      if (deletePromises.length > 0) {
+        await Promise.all(deletePromises)
+        console.log(`Successfully deleted ${deletedCount} duplicate departments`)
+        alert(`✅ Cleaned up ${deletedCount} duplicate departments!\n\nKept the oldest instance of each department.`)
       } else {
-        alert('No duplicate departments found.')
+        alert('✅ No duplicate departments found - your organization is clean!')
       }
 
     } catch (error) {
       console.error('Error cleaning up duplicate departments:', error)
-      alert('Failed to clean up duplicates. Please try again.')
+      alert(`❌ Failed to clean up duplicates: ${error.message}`)
+    }
+  }
+
+  // Fixes departments without proper organization tags
+  const fixDepartmentOrganizations = async () => {
+    if (!isAdmin()) {
+      console.error('Unauthorised access attempt to fix department organizations')
+      return
+    }
+
+    if (!user?.uid) {
+      console.error('No authenticated user found for department fix')
+      alert('Authentication error: Please refresh and try again')
+      return
+    }
+
+    const confirmed = window.confirm('This will fix departments that are missing organization tags or have incorrect ones. Continue?')
+    if (!confirmed) return
+
+    try {
+      // Get current user's organization
+      let currentUserOrg = 'core-demo'
+      
+      try {
+        if (user?.uid) {
+          const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+          if (currentUserDoc.exists() && currentUserDoc.data().organization) {
+            currentUserOrg = currentUserDoc.data().organization
+          }
+        }
+      } catch (orgError) {
+        console.log('Error getting user organization, using default:', orgError)
+      }
+
+      console.log('Fixing departments for organization:', currentUserOrg)
+
+      // Get ALL departments (no filtering) to find orphaned ones
+      const allDeptSnapshot = await getDocs(collection(db, 'departments'))
+      let fixedCount = 0
+      let deletedCount = 0
+
+      for (const deptDoc of allDeptSnapshot.docs) {
+        const deptData = deptDoc.data()
+        
+        // If department has no organization or wrong organization
+        if (!deptData.organization) {
+          // Delete departments without organization tags (orphaned data)
+          await deleteDoc(doc(db, 'departments', deptDoc.id))
+          deletedCount++
+          console.log(`Deleted orphaned department: ${deptData.name} (no organization)`)
+        } else if (deptData.organization !== currentUserOrg) {
+          // These belong to other companies - should not be visible to current admin
+          console.log(`Found department from other org: ${deptData.name} (${deptData.organization})`)
+        } else {
+          console.log(`Department OK: ${deptData.name} (${deptData.organization})`)
+        }
+      }
+
+      if (fixedCount > 0 || deletedCount > 0) {
+        alert(`✅ Department cleanup completed!\n\nFixed: ${fixedCount}\nDeleted orphaned: ${deletedCount}`)
+      } else {
+        alert('✅ All departments are properly organized!')
+      }
+
+    } catch (error) {
+      console.error('Error fixing department organizations:', error)
+      alert(`❌ Failed to fix departments: ${error.message}`)
     }
   }
 
@@ -621,12 +797,25 @@ const AdminPage = () => {
       return
     }
 
+    if (!user?.uid) {
+      console.error('No authenticated user found for cleanup')
+      alert('Authentication error: Please refresh and try again')
+      return
+    }
+
     try {
       // Get current user's organization
       let currentUserOrg = 'core-demo'
-      const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
-      if (currentUserDoc.exists() && currentUserDoc.data().organization) {
-        currentUserOrg = currentUserDoc.data().organization
+      
+      try {
+        if (user?.uid) {
+          const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+          if (currentUserDoc.exists() && currentUserDoc.data().organization) {
+            currentUserOrg = currentUserDoc.data().organization
+          }
+        }
+      } catch (orgError) {
+        console.log('Error getting user organization, using default:', orgError)
       }
 
       // Get all users for this organization
@@ -1035,6 +1224,13 @@ const AdminPage = () => {
                 title="Remove duplicate departments"
               >
                 🧹 Clean Duplicates
+              </button>
+              <button
+                onClick={fixDepartmentOrganizations}
+                className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                title="Fix departments without organization tags"
+              >
+                🔧 Fix Organizations
               </button>
               <button
                 onClick={() => setShowAddDepartment(true)}

@@ -215,8 +215,6 @@ const ErrorReportModal = ({ isOpen, onClose }) => {
             )}
           </button>
         </form>
-
-
       </div>
     </div>
   )
