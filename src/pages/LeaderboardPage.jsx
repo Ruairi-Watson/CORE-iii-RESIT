@@ -44,9 +44,7 @@ const LeaderboardPage = () => {
   
   // State for leaderboard data
   const [users, setUsers] = useState([])
-  const [departments, setDepartments] = useState([])
   const [filteredUsers, setFilteredUsers] = useState([])
-  const [selectedDepartment, setSelectedDepartment] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('total')
   const [viewMode, setViewMode] = useState('table') // 'table' or 'chart'
   const [loading, setLoading] = useState(true)
@@ -81,7 +79,6 @@ const LeaderboardPage = () => {
     return () => {
       if (window.leaderboardUnsubscribers) {
         window.leaderboardUnsubscribers.unsubscribeUsers?.()
-        window.leaderboardUnsubscribers.unsubscribeDepartments?.()
         delete window.leaderboardUnsubscribers
         console.log('Leaderboard real-time listeners cleaned up')
       }
@@ -91,7 +88,7 @@ const LeaderboardPage = () => {
   // Filters users when selections change
   useEffect(() => {
     filterUsers()
-  }, [users, selectedDepartment, selectedCategory])
+  }, [users, selectedCategory])
 
   // Sets up real-time listeners for users and departments with proper access control
   const setupRealtimeListeners = async () => {
@@ -264,26 +261,6 @@ const LeaderboardPage = () => {
         window.leaderboardUnsubscribers = { unsubscribeUsers }
       }
       
-      // Set up departments listener
-      const deptQuery = query(collection(db, 'departments'))
-      const unsubscribeDepartments = onSnapshot(deptQuery, (snapshot) => {
-        console.log('Real-time departments update received')
-        const deptData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        setDepartments(deptData)
-      }, (error) => {
-        console.error('Error with departments real-time listener:', error)
-      })
-      
-      // Update unsubscribers with departments listener
-      if (window.leaderboardUnsubscribers) {
-        window.leaderboardUnsubscribers.unsubscribeDepartments = unsubscribeDepartments
-      } else {
-        window.leaderboardUnsubscribers = { unsubscribeDepartments }
-      }
-      
       // Set loading to false if no Firebase configuration
       if (!isFirebaseConfigured) {
         setLoading(false)
@@ -355,14 +332,9 @@ const LeaderboardPage = () => {
     }
   }
 
-  // Filters users by department and category
+  // Filters users by category
   const filterUsers = () => {
     let filtered = [...users]
-    
-    // Filter by department
-    if (selectedDepartment !== 'all') {
-      filtered = filtered.filter(user => user.department === selectedDepartment)
-    }
     
     // Sort by the selected category
     filtered.sort((a, b) => {
@@ -578,26 +550,7 @@ const LeaderboardPage = () => {
 
       {/* Enhanced filters and controls */}
       <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-2xl p-6 border border-[#f0e4d7]/30 dark:border-gray-700/30 shadow-xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Department filter */}
-          <div>
-            <label className="block text-[#4b3f2a] dark:text-white font-semibold mb-2">
-              Department
-            </label>
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="w-full px-4 py-2 bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm border border-[#e9e4d7]/50 dark:border-gray-600/50 rounded-lg dark:text-white font-medium transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[#f7c59f]"
-            >
-              <option value="all">All Departments</option>
-              {departments.map(dept => (
-                <option key={dept.id} value={dept.name}>
-                  {dept.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Category filter */}
           <div>
             <label className="block text-[#4b3f2a] dark:text-white font-semibold mb-2">
